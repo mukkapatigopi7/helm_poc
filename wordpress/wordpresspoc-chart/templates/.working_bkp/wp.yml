@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wordpress-efs-pv-2
+  labels:
+    app: wordpress-1
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/home/ec2-user/eks-volume"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-pvc-claim-1
+  labels:
+    app: wordpress-1
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: manual      
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-service  #value is wordpress1
+  labels:
+    app: wordpress
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: eks.ceqapp.com    
+spec:
+  ports:
+    - port: {{ .Values.service.port }}  #value is 80
+      targetPort: {{ .Values.service.targetPort }} #value is 80
+      protocol: {{ .Values.service.protocol | default "TCP" }} #value is  TCP
+  selector:
+    app: wordpress
+    tier: frontend
+  type: {{ .Values.service.type }} #value is ingress
+---
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-wordpress
+  labels:
+    app: wordpress
+spec:
+  replicas:  {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: wordpress
+      tier: frontend
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        tier: frontend
+    spec:
+      containers:
+      - image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"  # value is wordpress:6.1-apache
+        name: wordpress
+        securityContext:
+          privileged: true  
+        env:
+        - name: WORDPRESS_DB_NAME
+          valueFrom:
+           configMapKeyRef:
+            name: wordpress-data
+            key: MYSQL_DATABASE
+        - name:  WORDPRESS_DB_USER
+          valueFrom:
+           configMapKeyRef:
+            name: wordpress-data
+            key: MYSQL_USER
+        - name:  WORDPRESS_DB_HOST
+          valueFrom:
+           configMapKeyRef:
+            name: wordpress-data
+            key:  WORDPRESS_DB_HOST
+        - name: WORDPRESS_TABLE_PREFIX
+          valueFrom:
+           configMapKeyRef:
+            name: wordpress-data
+            key: WORDPRESS_TABLE_PREFIX
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysecret
+              key: MYSQL_ROOT_PASSWORD
+        ports:
+        - containerPort: 80
+          name: wordpress
+        volumeMounts:
+        - name: wordpress-efs-pv-2
+          mountPropagation: "Bidirectional"
+          mountPath: /var/www/html/
+      volumes:
+      - name: wordpress-efs-pv-2
+        hostPath:
+          path: /home/ec2-user/eks-volume
+          type: DirectoryOrCreate
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-wordpress-1
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    external-dns.alpha.kubernetes.io/hostname: eks.ceqapp.com
+    alb.ingress.kubernetes.io/subnets:  subnet-0a0a0822f20418fa3, subnet-0eec6321f5fef19cd, subnet-0e40516c0505956b1 
+spec:
+  ingressClassName: alb
+  rules:
+  - host: eks.ceqapp.com	
+    http:
+       paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: {{ .Release.Name }}-service  #value is wordpress1
+              port:
+                number: 80
+

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+ name: {{ .Release.Name }}-wpdata-configmap
+data:
+ MYSQL_USER: admin
+ MYSQL_DATABASE: testwp
+ WORDPRESS_DB_HOST: mysql-rds.cvf7vcnz31lg.ap-south-1.rds.amazonaws.com
+ WORDPRESS_TABLE_PREFIX: pkprod_
+ repositories: |
+    - url: git@github.com:pinkesh-ceq/EKs-wordpress-CD.git
+      sshPrivateKeySecret:
+        name: my-deploy-secret
+        key: privateKey

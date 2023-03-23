@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-wordpress-hostpath
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    external-dns.alpha.kubernetes.io/hostname: eks1.ceqapp.com
+    alb.ingress.kubernetes.io/subnets:  subnet-0a0a0822f20418fa3, subnet-0eec6321f5fef19cd, subnet-0e40516c0505956b1 
+spec:
+  ingressClassName: alb
+  rules:
+  - host: eks1.ceqapp.com
+    http:
+       paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: wordpress-hostpath
+              port:
+                number: 80
+        - path: /helm
+          pathType: Prefix
+          backend:
+            service:
+              name: release-service
+              port:
+                number: 8080
